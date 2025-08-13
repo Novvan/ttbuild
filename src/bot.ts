@@ -13,7 +13,7 @@ import { CONFIG } from './config.js';
 
 // Define an enum with 3 choices
 enum BuildType {
-  TELLTALE_TOOL = 'TT_TOOL',
+  TELLTALE_TOOL = 'TELLTALE_TOOL',
   PC_BUILD = 'PC_BUILD',
   NX_BUILD = 'NX_BUILD'
 }
@@ -92,16 +92,24 @@ export async function startBot() {
 async function handleNewBuildCommand(interaction: ChatInputCommandInteraction) {
   const selectedStatus = interaction.options.getString('project') as BuildType;
 
-  // Create different responses based on the selected project
-  let color: number;
-  let title: string;
-  let description: string;
-  color = 0x27AE60; // Green
-  title = '✅ Build Successfully queued';
-  description = 'The build was sent for execution.';
-  
-  const baseUrl = `http://${CONFIG.TEAMCITY_USERNAME}:${CONFIG.TEAMCITY_PASSWORD}@${CONFIG.TEAMCITY_BASE_URL}/httpAuth/action.html?`
+  // Acknowledge the interaction immediately to prevent timeout
+  await interaction.deferReply();
+
+  // Variables to track build request result
+  let buildSuccess = false;
+  let errorMessage = '';
+
+  // Debug: Log the base URL construction
+  console.log('TEAMCITY_BASE_URL:', CONFIG.TEAMCITY_BASE_URL);
+
+  // Handle URL construction properly - check if protocol is already included
+  const baseUrl = CONFIG.TEAMCITY_BASE_URL.startsWith('http')
+    ? `${CONFIG.TEAMCITY_BASE_URL}/action.html?`
+    : `http://${CONFIG.TEAMCITY_BASE_URL}/action.html?`;
   const add2Queue = baseUrl + 'add2Queue=';
+
+  console.log('Constructed URL base:', baseUrl);
+  console.log('add2Queue URL:', add2Queue);
 
   const toolBuild = "Wolf1Remaster_TelltaleTool"
   const exeBuild = "Wolf1Remaster_BuildExecutable"
@@ -110,44 +118,129 @@ async function handleNewBuildCommand(interaction: ChatInputCommandInteraction) {
     case BuildType.TELLTALE_TOOL:
       try {
         // Send post request
-        const response = await fetch( add2Queue + toolBuild, {method: 'POST'});
-        console.log(response);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+        const response = await fetch(`${add2Queue}${toolBuild}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + CONFIG.TEAMCITY_TOKEN,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json'
+          },
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+        console.log('Response status:', response.status);
+        const responseText = await response.text();
+        console.log('Response text:', responseText);
+
+        if (response.ok) {
+          buildSuccess = true;
+        } else {
+          errorMessage = `TeamCity responded with status ${response.status}: ${responseText}`;
+        }
       } catch (error) {
         console.error('Error sending post request:', error);
+        errorMessage = `Failed to connect to TeamCity: ${error instanceof Error ? error.message : String(error)}`;
       }
       break;
     case BuildType.PC_BUILD:
       try {
         // Send post request
-        const response = await fetch( add2Queue + exeBuild, {method: 'POST'});
-        console.log(response);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+        const response = await fetch(`${add2Queue}${exeBuild}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + CONFIG.TEAMCITY_TOKEN,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json'
+          },
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+        console.log('Response status:', response.status);
+        const responseText = await response.text();
+        console.log('Response text:', responseText);
+
+        if (response.ok) {
+          buildSuccess = true;
+        } else {
+          errorMessage = `TeamCity responded with status ${response.status}: ${responseText}`;
+        }
       } catch (error) {
         console.error('Error sending post request:', error);
-      }  
-    break;
+        errorMessage = `Failed to connect to TeamCity: ${error instanceof Error ? error.message : String(error)}`;
+      }
+      break;
     case BuildType.NX_BUILD:
       try {
         // Send post request
-        const response = await fetch( add2Queue + exeBuild +"&name=visualStudioPlatform&value=NX64&name=bconfFile&value=nx.bconf&name=toolPlatform&value=NX" , {method: 'POST'});
-        console.log(response);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+        const response = await fetch(`${add2Queue}${exeBuild}&name=visualStudioPlatform&value=NX64&name=bconfFile&value=nx.bconf&name=toolPlatform&value=NX`, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + CONFIG.TEAMCITY_TOKEN,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json'
+          },
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+        console.log('Response status:', response.status);
+        const responseText = await response.text();
+        console.log('Response text:', responseText);
+
+        if (response.ok) {
+          buildSuccess = true;
+        } else {
+          errorMessage = `TeamCity responded with status ${response.status}: ${responseText}`;
+        }
       } catch (error) {
         console.error('Error sending post request:', error);
+        errorMessage = `Failed to connect to TeamCity: ${error instanceof Error ? error.message : String(error)}`;
       }
       break;
     default:
       break;
   }
 
-  const embed = new EmbedBuilder()
-    .setTitle(title)
-    .setDescription(description)
-    .setColor(color)
-    .addFields(
-      { name: 'Selected Status', value: selectedStatus, inline: true },
-      { name: 'Timestamp', value: new Date().toLocaleString(), inline: true }
-    )
-    .setTimestamp()
-    .setFooter({ text: 'Build Status Command' });
+  // Create embed based on build result
+  let embed: EmbedBuilder;
 
-  await interaction.reply({ embeds: [embed] });
+  if (buildSuccess) {
+    embed = new EmbedBuilder()
+      .setTitle('✅ Build Successfully Queued')
+      .setDescription('The build has been successfully added to the TeamCity queue.')
+      .setColor(0x27AE60) // Green
+      .addFields(
+        { name: 'Project', value: selectedStatus, inline: true },
+        { name: 'Status', value: 'Queued', inline: true },
+        { name: 'Timestamp', value: new Date().toLocaleString(), inline: true }
+      )
+      .setTimestamp()
+      .setFooter({ text: 'Build Status Command' });
+  } else {
+    embed = new EmbedBuilder()
+      .setTitle('❌ Build Queue Failed')
+      .setDescription('Failed to queue the build in TeamCity.')
+      .setColor(0xE74C3C) // Red
+      .addFields(
+        { name: 'Project', value: selectedStatus, inline: true },
+        { name: 'Status', value: 'Failed', inline: true },
+        { name: 'Error', value: errorMessage || 'Unknown error occurred', inline: false },
+        { name: 'Timestamp', value: new Date().toLocaleString(), inline: true }
+      )
+      .setTimestamp()
+      .setFooter({ text: 'Build Status Command' });
+  }
+
+  await interaction.editReply({ embeds: [embed] });
 }

@@ -20,8 +20,7 @@ export const CONFIG = {
     .filter(Boolean),
 
   TEAMCITY_BASE_URL: requireEnv('TEAMCITY_BASE_URL'),
-  TEAMCITY_USERNAME: requireEnv('TEAMCITY_USERNAME'),
-  TEAMCITY_PASSWORD: requireEnv('TEAMCITY_PASSWORD'),
+  TEAMCITY_TOKEN: requireEnv('TEAMCITY_TOKEN'),
 
   WEBHOOK_PORT: Number(requireEnv('WEBHOOK_PORT')),
   WEBHOOK_ROUTE: requireEnv('WEBHOOK_ROUTE')

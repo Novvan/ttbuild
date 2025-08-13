@@ -92,6 +92,49 @@ export async function startBot() {
 async function handleNewBuildCommand(interaction: ChatInputCommandInteraction) {
   const selectedStatus = interaction.options.getString('project') as BuildType;
 
+  // Check if user has required roles
+  if (CONFIG.DISCORD_ALLOWED_ROLES.length > 0) {
+    const member = interaction.member;
+    if (!member || !member.roles) {
+      await interaction.reply({
+        content: '❌ Unable to verify your roles. Please try again.',
+        ephemeral: true
+      });
+      return;
+    }
+
+    const userRoleIds = Array.isArray(member.roles)
+      ? member.roles
+      : member.roles.cache.map(role => role.id);
+
+    const hasRequiredRole = CONFIG.DISCORD_ALLOWED_ROLES.some(requiredRoleId =>
+      userRoleIds.includes(requiredRoleId)
+    );
+
+    if (!hasRequiredRole) {
+      // Get role names for display purposes
+      const userRoleNames = Array.isArray(member.roles)
+        ? member.roles.map(roleId => `<@&${roleId}>`) // Mention format for IDs
+        : member.roles.cache.map(role => role.name);
+
+      const requiredRoleNames = CONFIG.DISCORD_ALLOWED_ROLES.map(roleId => `<@&${roleId}>`);
+
+      const embed = new EmbedBuilder()
+        .setTitle('❌ Access Denied')
+        .setDescription('You do not have permission to use this command.')
+        .setColor(0xE74C3C) // Red
+        .addFields(
+          { name: 'Required Roles', value: requiredRoleNames.join(', '), inline: false },
+          { name: 'Your Roles', value: userRoleNames.length > 0 ? userRoleNames.join(', ') : 'None', inline: false }
+        )
+        .setTimestamp()
+        .setFooter({ text: 'Access Control' });
+
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+      return;
+    }
+  }
+
   // Acknowledge the interaction immediately to prevent timeout
   await interaction.deferReply();
 

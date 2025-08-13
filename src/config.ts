@@ -18,7 +18,6 @@ export const CONFIG = {
     .split(',')
     .map(role => role.trim())
     .filter(Boolean),
-
   TEAMCITY_BASE_URL: requireEnv('TEAMCITY_BASE_URL'),
   TEAMCITY_TOKEN: requireEnv('TEAMCITY_TOKEN'),
 
